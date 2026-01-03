@@ -3,8 +3,8 @@ Olympic Swimming
 
 A web-based game of PS1 concept style replayable video game. 
 
-## Play it Here! 
-[Try it here!](https://zhihong141.github.io/-AsciiArt-Converter-Revamped/) 
+## Game On! 
+[Play it here!](https://zhihong141.github.io/-AsciiArt-Converter-Revamped/) 
 
 ## How to Run Locally 
 1. Clone this repository. 
