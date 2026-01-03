@@ -154,7 +154,7 @@
   <div class="hint">
     Rendered internally at <b>320×240</b> and scaled up with nearest-neighbor.<br/>
     <b>In-race:</b> <span class="kbd">Space</span>/<span class="kbd">Enter</span> (or tap) to stroke • <span class="kbd">Shift</span> to sprint (costs stamina).<br/>
-    <b>Menu:</b> <span class="kbd">↑</span>/<span class="kbd">↓</span> difficulty • <span class="kbd">←</span>/<span class="kbd">→</span> mode • <span class="kbd">Esc</span> back.<br/>
+    <b>Menu:</b> <span class="kbd">↑</span>/<span class="kbd">↓</span> Select • <span class="kbd">←</span>/<span class="kbd">→</span> Mode • <span class="kbd">W</span>/<span class="kbd">S</span> Race Type • <span class="kbd">Esc</span> Back<br/>
   </div>
 </div>
 
@@ -827,8 +827,12 @@
 
     drawPS1Text(W/2, H/2 - 20, 'PAUSED', `rgba(255,210,74,${alpha})`, 1.5, 'center');
 
-    drawPS1Text(W/2, H/2 + 20, 'SPACE = RESUME', '#eaeaea', 1.0, 'center');
-    drawPS1Text(W/2, H/2 + 36, 'Q = QUIT   ESC = RESUME', 'rgba(255,255,255,0.6)', 0.9, 'center');
+    // Mouse hover effect hints
+    const my = lastPtr.y;
+    const resumeHover = (my >= H/2 + 10 && my <= H/2 + 30);
+    const quitHover = (my >= H/2 + 32 && my <= H/2 + 52);
+
+    drawPS1Text(W/2, H/2 + 36, 'Q = QUIT   ESC = RESUME', quitHover ? '#ff6a6a' : 'rgba(255,255,255,0.6)', 0.9, 'center');
   }
 
   let strokeConsumed=false;
@@ -1258,6 +1262,15 @@
         totalM = LENGTH_M * totalLengths;
         sfx.ui();
       }
+      // Added W/S for Race Type Selection
+      if(mode===MODE.QUICK && (e.code==='KeyW' || e.code==='KeyS')){
+        const dir = (e.code==='KeyS') ? 1 : -1; // S = Next, W = Prev
+        raceTypeSel = (raceTypeSel + RACE_TYPES.length + dir) % RACE_TYPES.length;
+        raceType = RACE_TYPES[raceTypeSel];
+        totalLengths = raceType.lengths;
+        totalM = LENGTH_M * totalLengths;
+        sfx.ui();
+      }
       if(mode===MODE.QUICK && (e.code==='KeyA' || e.code==='KeyD' || e.code==='Comma' || e.code==='Period')){
         const dir = (e.code==='KeyD' || e.code==='Period') ? 1 : -1;
         raceTypeSel = (raceTypeSel + RACE_TYPES.length + dir) % RACE_TYPES.length;
@@ -1387,29 +1400,7 @@
     let dt=(t-last)/1000; last=t;
     dt=clamp(dt,0,0.033);
 
-    // Skip updates if paused
-    if(state===STATE.PAUSE){
-        drawPool(t/1000); // Keep drawing BG
-        // Draw swimmers static
-        const sorted=swimmers.slice().sort((a,b)=>a.dist-b.dist);
-        for(const s of sorted) drawSwimmer(s,t/1000);
-        drawHUD();
-        drawStandings();
-        drawPause(); // Overlay
-
-        if(settings.crt) crtOverlay(t/1000);
-        present(t/1000);
-        requestAnimationFrame(frame);
-        return;
-    }
-
-    rhythm.phase=(rhythm.phase+dt*rhythm.speed)%1.0;
-    stepSparks(dt);
-    stepCommentary(dt);
-
-    if(lastSplitObj && lastSplitObj.timer > 0) lastSplitObj.timer -= dt;
-
-    // Transition Fades
+    // Transition Fades Logic must run even if paused
     if(trans.active){
         trans.t += dt;
         if(trans.t >= trans.dur/2 && state !== trans.targetState){
@@ -1420,6 +1411,52 @@
             trans.active=false;
         }
     }
+
+    // Skip updates if paused
+    if(state===STATE.PAUSE){
+        drawPool(t/1000); // Keep drawing BG
+        // Draw swimmers static
+        const sorted=swimmers.slice().sort((a,b)=>a.dist-b.dist);
+        for(const s of sorted) drawSwimmer(s,t/1000);
+        drawHUD();
+        drawStandings();
+        drawPause(); // Overlay
+
+        // Handle pause clicks
+        if(pressed && lastPtr.down && !trans.active){
+            const my = lastPtr.y;
+            // Simple hit regions
+            if(my >= H/2 + 10 && my <= H/2 + 30){
+                // Resume
+                state = STATE.RACE;
+                pressed=false; lastPtr.down=false; sfx.ui();
+            } else if(my >= H/2 + 32 && my <= H/2 + 52){
+                // Quit
+                transitionTo(STATE.MENU);
+                pressed=false; lastPtr.down=false; sfx.ui();
+            }
+        }
+
+        if(settings.crt) crtOverlay(t/1000);
+
+        // Apply Fade Overlay (Must draw in pause too)
+        if(trans.active){
+            const fadeProg = trans.t / trans.dur;
+            const alpha = Math.sin(fadeProg * Math.PI);
+            ctx.fillStyle=`rgba(0,0,0,${Math.min(1, alpha * 1.5)})`;
+            ctx.fillRect(0,0,W,H);
+        }
+
+        present(t/1000);
+        requestAnimationFrame(frame);
+        return;
+    }
+
+    rhythm.phase=(rhythm.phase+dt*rhythm.speed)%1.0;
+    stepSparks(dt);
+    stepCommentary(dt);
+
+    if(lastSplitObj && lastSplitObj.timer > 0) lastSplitObj.timer -= dt;
 
     if(state===STATE.BOOT){
       bootT+=dt;
